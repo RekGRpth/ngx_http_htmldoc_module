@@ -27,9 +27,9 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     FILE *out = open_memstream(&output_data, &output_len);
     if (!out) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!out"); goto fclose; }
     set_out(out);
+    htmlSetCharSet("utf-8");
     tree_t *document = htmlAddTree(NULL, MARKUP_FILE, NULL);
     if (!document) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!document"); goto fclose; }
-    htmlSetCharSet("utf-8");
     htmlReadFile(document, in, ".");
     htmlSetVariable(document, (uchar *)"_HD_FILENAME", (uchar *)"");
     htmlSetVariable(document, (uchar *)"_HD_BASE", (uchar *)".");
