@@ -40,9 +40,9 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     image_flush_cache();
 fclose:
     fclose(in);
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "output_data = %s", output_data);
+//    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "output_data = %s", output_data);
     if (output_len) {
-        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "output_len = %li", output_len);
+//        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "output_len = %li", output_len);
         ngx_buf_t *buf = ngx_create_temp_buf(r->pool, output_len);
         if (!buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!buf"); goto ret; }
         buf->last = ngx_cpymem(buf->last, output_data, output_len);
