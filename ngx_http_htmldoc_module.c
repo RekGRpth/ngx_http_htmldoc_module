@@ -26,15 +26,14 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     size_t output_len = 0;
     FILE *out = open_memstream(&output_data, &output_len);
     if (!out) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!out"); goto fclose; }
-    set_out(out);
     htmlSetCharSet("utf-8");
     tree_t *document = htmlAddTree(NULL, MARKUP_FILE, NULL);
     if (!document) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!document"); goto fclose; }
     htmlSetVariable(document, (uchar *)"_HD_FILENAME", (uchar *)"");
     htmlSetVariable(document, (uchar *)"_HD_BASE", (uchar *)".");
-    htmlReadFile(document, in, ".");
+    htmlReadFile2(document, in, ".");
     htmlFixLinks(document, document, 0);
-    pspdf_export(document, NULL);
+    pspdf_export_out(document, NULL, out);
     htmlDeleteTree(document);
     file_cleanup();
     image_flush_cache();
