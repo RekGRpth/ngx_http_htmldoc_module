@@ -4,8 +4,14 @@
 #include <ngx_http.h>
 #include "htmldoc.h"
 
+enum {
+    OUTPUT_TYPE_PDF = 0,
+    OUTPUT_TYPE_PS
+};
+
 typedef struct {
     ngx_http_complex_value_t *input_data;
+    ngx_uint_t output_type;
 } ngx_http_htmldoc_loc_conf_t;
 
 ngx_module_t ngx_http_htmldoc_module;
@@ -33,22 +39,29 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     htmlSetVariable(document, (uchar *)"_HD_BASE", (uchar *)".");
     htmlReadFile2(document, in, ".");
     htmlFixLinks(document, document, 0);
+    if (conf->output_type == OUTPUT_TYPE_PDF) {
+        PSLevel = 0;
+    } else if (conf->output_type == OUTPUT_TYPE_PS) {
+        PSLevel = 3;
+    }
     pspdf_export_out(document, NULL, out);
     htmlDeleteTree(document);
     file_cleanup();
     image_flush_cache();
 fclose:
     fclose(in);
-//    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "output_data = %s", output_data);
     if (output_len) {
-//        ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "output_len = %li", output_len);
         ngx_buf_t *buf = ngx_create_temp_buf(r->pool, output_len);
         if (!buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!buf"); goto ret; }
         buf->last = ngx_cpymem(buf->last, output_data, output_len);
         buf->last_buf = (r == r->main) ? 1 : 0;
         buf->last_in_chain = 1;
         ngx_chain_t ch = {.buf = buf, .next = NULL};
-        ngx_str_set(&r->headers_out.content_type, "application/pdf");
+        if (conf->output_type == OUTPUT_TYPE_PDF) {
+            ngx_str_set(&r->headers_out.content_type, "application/pdf");
+        } else if (conf->output_type == OUTPUT_TYPE_PS) {
+            ngx_str_set(&r->headers_out.content_type, "application/ps");
+        }
         r->headers_out.status = NGX_HTTP_OK;
         r->headers_out.content_length_n = output_len;
         rc = ngx_http_send_header(r);
@@ -61,13 +74,28 @@ ret:
 }
 
 static char *ngx_http_htmldoc_convert_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
+    char *p = conf;
+    ngx_uint_t *output_type = (ngx_uint_t *) (p + offsetof(ngx_http_htmldoc_loc_conf_t, output_type));
+    if (*output_type != NGX_CONF_UNSET_UINT) return "is duplicate";
+    ngx_str_t *value = cf->args->elts;
+    if (!ngx_strncasecmp(value[0].data, (u_char *)"html2pdf", sizeof("html2pdf") - 1)) {
+        *output_type = OUTPUT_TYPE_PDF;
+    } else if (!ngx_strncasecmp(value[0].data, (u_char *)"html2ps", sizeof("html2ps") - 1)) {
+        *output_type = OUTPUT_TYPE_PS;
+    }
     ngx_http_core_loc_conf_t *clcf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
     clcf->handler = ngx_http_htmldoc_handler;
     return ngx_http_set_complex_value_slot(cf, cmd, conf);
 }
 
 static ngx_command_t ngx_http_htmldoc_commands[] = {
-  { .name = ngx_string("htmldoc"),
+  { .name = ngx_string("html2pdf"),
+    .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+    .set = ngx_http_htmldoc_convert_set,
+    .conf = NGX_HTTP_LOC_CONF_OFFSET,
+    .offset = offsetof(ngx_http_htmldoc_loc_conf_t, input_data),
+    .post = NULL },
+  { .name = ngx_string("html2ps"),
     .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
     .set = ngx_http_htmldoc_convert_set,
     .conf = NGX_HTTP_LOC_CONF_OFFSET,
@@ -79,6 +107,7 @@ static ngx_command_t ngx_http_htmldoc_commands[] = {
 static void *ngx_http_htmldoc_create_loc_conf(ngx_conf_t *cf) {
     ngx_http_htmldoc_loc_conf_t *conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_htmldoc_loc_conf_t));
     if (!conf) return NGX_CONF_ERROR;
+    conf->output_type = NGX_CONF_UNSET_UINT;
     return conf;
 }
 
@@ -86,6 +115,7 @@ static char *ngx_http_htmldoc_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
     ngx_http_htmldoc_loc_conf_t *prev = parent;
     ngx_http_htmldoc_loc_conf_t *conf = child;
     if (!conf->input_data) conf->input_data = prev->input_data;
+    ngx_conf_merge_uint_value(conf->output_type, prev->output_type, NGX_CONF_UNSET_UINT);
     return NGX_CONF_OK;
 }
 
