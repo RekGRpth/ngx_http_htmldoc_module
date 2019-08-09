@@ -70,25 +70,24 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     FILE *out = open_memstream(&output_data, &output_len);
     if (!out) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!out"); goto htmlDeleteTree; }
     pspdf_export_out(document, NULL, out);
-//    if (output_len) {
-        ngx_buf_t *buf = ngx_create_temp_buf(r->pool, output_len);
-        if (!buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!buf"); goto htmlDeleteTree; }
-        buf->last = ngx_cpymem(buf->last, output_data, output_len);
-        buf->last_buf = (r == r->main) ? 1 : 0;
-        buf->last_in_chain = 1;
-        ngx_chain_t ch = {.buf = buf, .next = NULL};
-        if (conf->output_type == OUTPUT_TYPE_PDF) {
-            ngx_str_set(&r->headers_out.content_type, "application/pdf");
-        } else if (conf->output_type == OUTPUT_TYPE_PS) {
-            ngx_str_set(&r->headers_out.content_type, "application/ps");
-        }
-        r->headers_out.status = NGX_HTTP_OK;
-        r->headers_out.content_length_n = output_len;
-        rc = ngx_http_send_header(r);
-        ngx_http_weak_etag(r);
-        if (rc == NGX_ERROR || rc > NGX_OK || r->header_only); else rc = ngx_http_output_filter(r, &ch);
-        free(output_data);
-//    }
+    ngx_buf_t *buf = ngx_create_temp_buf(r->pool, output_len);
+    if (!buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!buf"); goto free; }
+    buf->last = ngx_cpymem(buf->last, output_data, output_len);
+    buf->last_buf = (r == r->main) ? 1 : 0;
+    buf->last_in_chain = 1;
+    ngx_chain_t ch = {.buf = buf, .next = NULL};
+    if (conf->output_type == OUTPUT_TYPE_PDF) {
+        ngx_str_set(&r->headers_out.content_type, "application/pdf");
+    } else if (conf->output_type == OUTPUT_TYPE_PS) {
+        ngx_str_set(&r->headers_out.content_type, "application/ps");
+    }
+    r->headers_out.status = NGX_HTTP_OK;
+    r->headers_out.content_length_n = output_len;
+    rc = ngx_http_send_header(r);
+    ngx_http_weak_etag(r);
+    if (rc == NGX_ERROR || rc > NGX_OK || r->header_only); else rc = ngx_http_output_filter(r, &ch);
+free:
+    free(output_data);
 htmlDeleteTree:
     htmlDeleteTree(document);
     file_cleanup();
