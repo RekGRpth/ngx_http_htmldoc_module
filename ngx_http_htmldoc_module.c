@@ -111,6 +111,7 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
             }
         } break;
     }
+    while (document && document->prev) document = document->prev;
     htmlFixLinks(document, document, 0);
     switch (conf->output_type) {
         case OUTPUT_TYPE_PDF: PSLevel = 0; break;
