@@ -29,6 +29,7 @@ typedef struct {
 ngx_module_t ngx_http_htmldoc_module;
 
 static ngx_int_t read_fileurl(const char *fileurl, tree_t **document, const char *path, ngx_log_t *log) {
+    _htmlPPI = 72.0f * _htmlBrowserWidth / (PageWidth - PageLeft - PageRight);
     tree_t *file = htmlAddTree(NULL, MARKUP_FILE, NULL);
     if (!file) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file"); return NGX_ERROR; }
     htmlSetVariable(file, (uchar *)"_HD_URL", (uchar *)fileurl);
@@ -51,6 +52,7 @@ static ngx_int_t read_fileurl(const char *fileurl, tree_t **document, const char
 }
 
 static ngx_int_t read_html(char *html, size_t len, tree_t **document, ngx_log_t *log) {
+    _htmlPPI = 72.0f * _htmlBrowserWidth / (PageWidth - PageLeft - PageRight);
     tree_t *file = htmlAddTree(NULL, MARKUP_FILE, NULL);
     if (!file) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file"); return NGX_ERROR; }
     htmlSetVariable(file, (uchar *)"_HD_FILENAME", (uchar *)"");
@@ -75,7 +77,6 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     ngx_http_htmldoc_loc_conf_t *conf = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
     rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
     char *output_data = NULL;
-    _htmlPPI = 72.0f * _htmlBrowserWidth / (PageWidth - PageLeft - PageRight);
     htmlSetCharSet("utf-8");
     tree_t *document = NULL;
     switch (conf->input_type) {
