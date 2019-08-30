@@ -77,7 +77,6 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     ngx_http_htmldoc_loc_conf_t *conf = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
     rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
     char *output_data = NULL;
-    htmlSetCharSet("utf-8");
     tree_t *document = NULL;
     switch (conf->input_type) {
         case INPUT_TYPE_FILE: if (conf->input_data && conf->input_data->nelts) {
