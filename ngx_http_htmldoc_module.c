@@ -47,8 +47,8 @@ static ngx_int_t read_fileurl(const char *fileurl, tree_t **document, const char
     if (!in) { ngx_log_error(NGX_LOG_ERR, log, 0, "!in"); return NGX_ERROR; }
     htmlReadFile2(file, in, base);
     fclose(in);
-    if (*document == NULL) *document = file; else {
-        while ((*document)->next != NULL) *document = (*document)->next;
+    if (!*document) *document = file; else {
+        while ((*document)->next) *document = (*document)->next;
         (*document)->next = file;
         file->prev = *document;
     }
@@ -65,8 +65,8 @@ static ngx_int_t read_html(char *html, size_t len, tree_t **document, ngx_log_t 
     if (!in) { ngx_log_error(NGX_LOG_ERR, log, 0, "!in"); return NGX_ERROR; }
     htmlReadFile2(file, in, ".");
     fclose(in);
-    if (*document == NULL) *document = file; else {
-        while ((*document)->next != NULL) *document = (*document)->next;
+    if (!*document) *document = file; else {
+        while ((*document)->next) *document = (*document)->next;
         (*document)->next = file;
         file->prev = *document;
     }
@@ -150,16 +150,16 @@ htmlDeleteTree:
 
 static char *ngx_http_htmldoc_convert_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_http_htmldoc_location_conf_t *location_conf = conf;
-    if (location_conf->data == NGX_CONF_UNSET_PTR) return "is duplicate";
-    location_conf->type = *(ngx_http_htmldoc_type_t *)cmd->post;
+    if (location_conf->data != NGX_CONF_UNSET_PTR) return "is duplicate";
+    if (!(location_conf->data = ngx_array_create(cf->pool, 4, sizeof(ngx_http_complex_value_t)))) return "!ngx_array_create";
     ngx_str_t *elts = cf->args->elts;
-    if (location_conf->data == NGX_CONF_UNSET_PTR && !(location_conf->data = ngx_array_create(cf->pool, 4, sizeof(ngx_http_complex_value_t)))) return "!ngx_array_create";
     for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
         ngx_http_complex_value_t *cv = ngx_array_push(location_conf->data);
         if (!cv) return "!ngx_array_push";
         ngx_http_compile_complex_value_t ccv = {cf, &elts[i], cv, 0, 0, 0};
         if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
     }
+    location_conf->type = *(ngx_http_htmldoc_type_t *)cmd->post;
     ngx_http_core_loc_conf_t *core_loc_conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
     core_loc_conf->handler = ngx_http_htmldoc_handler;
     return NGX_CONF_OK;
