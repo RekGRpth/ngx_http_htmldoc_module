@@ -35,16 +35,16 @@ ngx_module_t ngx_http_htmldoc_module;
 static ngx_int_t read_fileurl(const u_char *fileurl, tree_t **document, const char *path, ngx_log_t *log) {
     _htmlPPI = 72.0f * _htmlBrowserWidth / (PageWidth - PageLeft - PageRight);
     tree_t *file = htmlAddTree(NULL, MARKUP_FILE, NULL);
-    if (!file) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file"); return NGX_ERROR; }
+    if (!file) { ngx_log_error(NGX_LOG_ERR, log, 0, "!htmlAddTree"); return NGX_ERROR; }
     htmlSetVariable(file, (uchar *)"_HD_URL", (uchar *)fileurl);
     htmlSetVariable(file, (uchar *)"_HD_FILENAME", (uchar *)file_basename((const char *)fileurl));
     const char *realname = file_find(path, (const char *)fileurl);
-    if (!realname) { ngx_log_error(NGX_LOG_ERR, log, 0, "!realname"); return NGX_ERROR; }
+    if (!realname) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file_find"); return NGX_ERROR; }
     const char *base = file_directory((const char *)fileurl);
-    if (!base) { ngx_log_error(NGX_LOG_ERR, log, 0, "!base"); return NGX_ERROR; }
+    if (!base) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file_directory"); return NGX_ERROR; }
     htmlSetVariable(file, (uchar *)"_HD_BASE", (uchar *)base);
     FILE *in = fopen(realname, "rb");
-    if (!in) { ngx_log_error(NGX_LOG_ERR, log, 0, "!in"); return NGX_ERROR; }
+    if (!in) { ngx_log_error(NGX_LOG_ERR, log, 0, "!fopen"); return NGX_ERROR; }
     htmlReadFile2(file, in, base);
     fclose(in);
     if (!*document) *document = file; else {
@@ -58,11 +58,11 @@ static ngx_int_t read_fileurl(const u_char *fileurl, tree_t **document, const ch
 static ngx_int_t read_html(u_char *html, size_t len, tree_t **document, ngx_log_t *log) {
     _htmlPPI = 72.0f * _htmlBrowserWidth / (PageWidth - PageLeft - PageRight);
     tree_t *file = htmlAddTree(NULL, MARKUP_FILE, NULL);
-    if (!file) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file"); return NGX_ERROR; }
+    if (!file) { ngx_log_error(NGX_LOG_ERR, log, 0, "!htmlAddTree"); return NGX_ERROR; }
     htmlSetVariable(file, (uchar *)"_HD_FILENAME", (uchar *)"");
     htmlSetVariable(file, (uchar *)"_HD_BASE", (uchar *)".");
     FILE *in = fmemopen(html, len, "rb");
-    if (!in) { ngx_log_error(NGX_LOG_ERR, log, 0, "!in"); return NGX_ERROR; }
+    if (!in) { ngx_log_error(NGX_LOG_ERR, log, 0, "!fmemopen"); return NGX_ERROR; }
     htmlReadFile2(file, in, ".");
     fclose(in);
     if (!*document) *document = file; else {
