@@ -83,26 +83,26 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     ngx_str_t output = ngx_null_string;
     tree_t *document = NULL;
     ngx_http_complex_value_t *elts = conf->data->elts;
-    ngx_str_t data;
-    switch (conf->type.input) {
-        case INPUT_TYPE_FILE: for (ngx_uint_t i = 0; i < conf->data->nelts; i++) {
-            if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto htmlDeleteTree; }
-            u_char *file = ngx_pnalloc(r->pool, (data.len + 1));
-            if (!file) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto htmlDeleteTree; }
-            (void) ngx_cpystrn(file, data.data, data.len + 1);
-            if (read_fileurl(file, &document, Path, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!read_fileurl"); goto htmlDeleteTree; }
-        } break;
-        case INPUT_TYPE_HTML: for (ngx_uint_t i = 0; i < conf->data->nelts; i++) {
-            if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto htmlDeleteTree; }
-            if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!read_fileurl"); goto htmlDeleteTree; }
-        } break;
-        case INPUT_TYPE_URL: for (ngx_uint_t i = 0; i < conf->data->nelts; i++) {
-            if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto htmlDeleteTree; }
-            u_char *url = ngx_pnalloc(r->pool, (data.len + 1));
-            if (!url) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto htmlDeleteTree; }
-            (void) ngx_cpystrn(url, data.data, data.len + 1);
-            if (read_fileurl(url, &document, NULL, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!read_fileurl"); goto htmlDeleteTree; }
-        } break;
+    for (ngx_uint_t i = 0; i < conf->data->nelts; i++) {
+        ngx_str_t data;
+        if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto htmlDeleteTree; }
+        switch (conf->type.input) {
+            case INPUT_TYPE_FILE: {
+                u_char *fileurl = ngx_pnalloc(r->pool, (data.len + 1));
+                if (!fileurl) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto htmlDeleteTree; }
+                (void) ngx_cpystrn(fileurl, data.data, data.len + 1);
+                if (read_fileurl(fileurl, &document, Path, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!read_fileurl"); goto htmlDeleteTree; }
+            } break;
+            case INPUT_TYPE_HTML: {
+                if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!read_fileurl"); goto htmlDeleteTree; }
+            } break;
+            case INPUT_TYPE_URL: {
+                u_char *fileurl = ngx_pnalloc(r->pool, (data.len + 1));
+                if (!fileurl) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto htmlDeleteTree; }
+                (void) ngx_cpystrn(fileurl, data.data, data.len + 1);
+                if (read_fileurl(fileurl, &document, NULL, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!read_fileurl"); goto htmlDeleteTree; }
+            } break;
+        }
     }
     while (document && document->prev) document = document->prev;
     htmlFixLinks(document, document, 0);
