@@ -193,7 +193,7 @@ static ngx_command_t ngx_http_htmldoc_commands[] = {
 
 static void *ngx_http_htmldoc_create_loc_conf(ngx_conf_t *cf) {
     ngx_http_htmldoc_location_conf_t *location_conf = ngx_pcalloc(cf->pool, sizeof(ngx_http_htmldoc_location_conf_t));
-    if (!location_conf) return NGX_CONF_ERROR;
+    if (!location_conf) return NULL;
     location_conf->data = NGX_CONF_UNSET_PTR;
     location_conf->type.input = NGX_CONF_UNSET_UINT;
     location_conf->type.output = NGX_CONF_UNSET_UINT;
