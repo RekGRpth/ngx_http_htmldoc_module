@@ -86,6 +86,7 @@ static void ngx_http_htmldoc_handler_internal(ngx_http_request_t *r) {
     for (ngx_uint_t i = 0; i < location_conf->data->nelts; i++) {
         ngx_str_t data;
         if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto htmlDeleteTree; }
+        if (!_htmlInitialized) htmlSetCharSet("utf-8");
         switch (location_conf->type.input) {
             case INPUT_TYPE_HTML: {
                 if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); goto htmlDeleteTree; }
