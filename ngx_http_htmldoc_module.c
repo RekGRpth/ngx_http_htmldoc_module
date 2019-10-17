@@ -26,6 +26,10 @@ typedef struct {
 } ngx_http_htmldoc_type_t;
 
 typedef struct {
+    ngx_buf_t *buf;
+} ngx_http_htmldoc_context_t;
+
+typedef struct {
     ngx_array_t *data;
     ngx_http_htmldoc_type_t type;
 } ngx_http_htmldoc_location_conf_t;
@@ -73,13 +77,9 @@ static ngx_int_t read_html(u_char *html, size_t len, tree_t **document, ngx_log_
     return NGX_OK;
 }
 
-static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "ngx_http_htmldoc_handler");
-    if (!(r->method & NGX_HTTP_GET)) return NGX_HTTP_NOT_ALLOWED;
-    ngx_int_t rc = ngx_http_discard_request_body(r);
-    if (rc != NGX_OK && rc != NGX_AGAIN) return rc;
+static void ngx_http_htmldoc_handler_internal(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_htmldoc_location_conf_t *location_conf = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
-    rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
     ngx_str_t output = ngx_null_string;
     tree_t *document = NULL;
     ngx_http_complex_value_t *elts = location_conf->data->elts;
@@ -115,22 +115,68 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     if (buf->last != buf->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "buf->last != buf->end"); goto free; }
     buf->last_buf = (r == r->main) ? 1 : 0;
     buf->last_in_chain = 1;
-    ngx_chain_t *chain = ngx_alloc_chain_link(r->pool);
-    if (!chain) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_alloc_chain_link"); goto free; }
-    chain->buf = buf;
-    chain->next = NULL;
-    r->headers_out.status = NGX_HTTP_OK;
-    r->headers_out.content_length_n = output.len;
-    rc = ngx_http_send_header(r);
-    ngx_http_weak_etag(r);
-    if (rc == NGX_ERROR || rc > NGX_OK || r->header_only); else rc = ngx_http_output_filter(r, chain);
+    ngx_http_htmldoc_context_t *context = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
+    context->buf = buf;
 free:
     free(output.data);
 htmlDeleteTree:
     if (document) htmlDeleteTree(document);
     file_cleanup();
     image_flush_cache();
+}
+
+static void ngx_http_htmldoc_task_handler(void *data, ngx_log_t *log) {
+    ngx_http_request_t *r = data;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_htmldoc_handler_internal(r);
+}
+
+static ngx_int_t ngx_http_htmldoc_handler_internal2(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_int_t rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
+    ngx_http_htmldoc_context_t *context = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
+    if (!context->buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!context->buf"); return rc; }
+    ngx_chain_t *chain = ngx_alloc_chain_link(r->pool);
+    if (!chain) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_alloc_chain_link"); return rc; }
+    chain->buf = context->buf;
+    chain->next = NULL;
+    r->headers_out.status = NGX_HTTP_OK;
+    r->headers_out.content_length_n = context->buf->end - context->buf->pos;
+    rc = ngx_http_send_header(r);
+    ngx_http_weak_etag(r);
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
+    if (rc == NGX_ERROR || rc > NGX_OK || r->header_only); else rc = ngx_http_output_filter(r, chain);
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "rc = %i", rc);
     return rc;
+}
+
+static void ngx_http_htmldoc_event_handler(ngx_event_t *ev) {
+    ngx_http_request_t *r = ev->data;
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    ngx_http_finalize_request(r, ngx_http_htmldoc_handler_internal2(r));
+}
+
+static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    if (!(r->method & NGX_HTTP_GET)) return NGX_HTTP_NOT_ALLOWED;
+    ngx_int_t rc = ngx_http_discard_request_body(r);
+    if (rc != NGX_OK && rc != NGX_AGAIN) return rc;
+    ngx_http_htmldoc_context_t *context = ngx_pcalloc(r->pool, sizeof(ngx_http_htmldoc_context_t));
+    ngx_http_set_ctx(r, context, ngx_http_htmldoc_module);
+    ngx_http_core_loc_conf_t *core_loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+    if (core_loc_conf->thread_pool) {
+        ngx_thread_task_t *task = ngx_thread_task_alloc(r->pool, 0);
+        if (!task) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!task"); return NGX_ERROR; }
+        task->handler = ngx_http_htmldoc_task_handler;
+        task->ctx = r;
+        task->event.handler = ngx_http_htmldoc_event_handler;
+        task->event.data = r;
+        if (ngx_thread_task_post(core_loc_conf->thread_pool, task) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_thread_task_post != NGX_OK"); return NGX_ERROR; }
+        r->main->count++;
+        return NGX_OK;
+    }
+    ngx_http_htmldoc_handler_internal(r);
+    return ngx_http_htmldoc_handler_internal2(r);
 }
 
 static char *ngx_http_htmldoc_convert_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
