@@ -78,48 +78,45 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     if (!(r->method & NGX_HTTP_GET)) return NGX_HTTP_NOT_ALLOWED;
     ngx_int_t rc = ngx_http_discard_request_body(r);
     if (rc != NGX_OK && rc != NGX_AGAIN) return rc;
-    ngx_http_htmldoc_location_conf_t *conf = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
+    ngx_http_htmldoc_location_conf_t *location_conf = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
     rc = NGX_HTTP_INTERNAL_SERVER_ERROR;
     ngx_str_t output = ngx_null_string;
     tree_t *document = NULL;
-    ngx_http_complex_value_t *elts = conf->data->elts;
-    for (ngx_uint_t i = 0; i < conf->data->nelts; i++) {
+    ngx_http_complex_value_t *elts = location_conf->data->elts;
+    for (ngx_uint_t i = 0; i < location_conf->data->nelts; i++) {
         ngx_str_t data;
         if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto htmlDeleteTree; }
-        switch (conf->type.input) {
+        switch (location_conf->type.input) {
             case INPUT_TYPE_HTML: {
-                if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!read_fileurl"); goto htmlDeleteTree; }
+                if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); goto htmlDeleteTree; }
             } break;
             default: {
                 u_char *fileurl = ngx_pnalloc(r->pool, (data.len + 1));
                 if (!fileurl) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto htmlDeleteTree; }
                 (void) ngx_cpystrn(fileurl, data.data, data.len + 1);
-                if (read_fileurl(fileurl, &document, conf->type.input == INPUT_TYPE_FILE ? Path : NULL, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!read_fileurl"); goto htmlDeleteTree; }
+                if (read_fileurl(fileurl, &document, location_conf->type.input == INPUT_TYPE_FILE ? Path : NULL, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_fileurl != NGX_OK"); goto htmlDeleteTree; }
             } break;
         }
     }
     while (document && document->prev) document = document->prev;
     htmlFixLinks(document, document, 0);
-    switch (conf->type.output) {
-        case OUTPUT_TYPE_PDF: PSLevel = 0; break;
-        case OUTPUT_TYPE_PS: PSLevel = 3; break;
+    switch (location_conf->type.output) {
+        case OUTPUT_TYPE_PDF: PSLevel = 0; ngx_str_set(&r->headers_out.content_type, "application/pdf"); break;
+        case OUTPUT_TYPE_PS: PSLevel = 3; ngx_str_set(&r->headers_out.content_type, "application/ps"); break;
     }
     FILE *out = open_memstream((char **)&output.data, &output.len);
     if (!out) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!open_memstream"); goto htmlDeleteTree; }
     pspdf_export_out(document, NULL, out);
+    if (!output.len) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!output.len"); goto free; }
     ngx_buf_t *buf = ngx_create_temp_buf(r->pool, output.len);
     if (!buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_create_temp_buf"); goto free; }
-    ngx_chain_t *chain = ngx_alloc_chain_link(r->pool);
-    if (!chain) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_alloc_chain_link"); goto free; }
-    chain->buf = buf;
     buf->memory = 1;
     buf->last = ngx_copy(buf->last, output.data, output.len);
     if (buf->last != buf->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "buf->last != buf->end"); goto free; }
+    ngx_chain_t *chain = ngx_alloc_chain_link(r->pool);
+    if (!chain) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_alloc_chain_link"); goto free; }
+    chain->buf = buf;
     chain->next = NULL;
-    switch (conf->type.output) {
-        case OUTPUT_TYPE_PDF: ngx_str_set(&r->headers_out.content_type, "application/pdf"); break;
-        case OUTPUT_TYPE_PS: ngx_str_set(&r->headers_out.content_type, "application/ps"); break;
-    }
     r->headers_out.status = NGX_HTTP_OK;
     r->headers_out.content_length_n = output.len;
     rc = ngx_http_send_header(r);
