@@ -11,7 +11,7 @@ enum {
 
 enum {
     INPUT_TYPE_FILE = 0,
-    INPUT_TYPE_HTML,
+    INPUT_TYPE_TEXT,
     INPUT_TYPE_URL
 };
 
@@ -88,7 +88,7 @@ static void ngx_http_htmldoc_handler_internal(ngx_http_request_t *r) {
         if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto htmlDeleteTree; }
         if (!_htmlInitialized) htmlSetCharSet("utf-8");
         switch (location_conf->type.input) {
-            case INPUT_TYPE_HTML: {
+            case INPUT_TYPE_TEXT: {
                 if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); goto htmlDeleteTree; }
             } break;
             default: {
@@ -210,18 +210,18 @@ static ngx_command_t ngx_http_htmldoc_commands[] = {
     .conf = NGX_HTTP_LOC_CONF_OFFSET,
     .offset = offsetof(ngx_http_htmldoc_location_conf_t, data),
     .post = &(ngx_http_htmldoc_type_t){ INPUT_TYPE_FILE, OUTPUT_TYPE_PS } },
-  { .name = ngx_string("html2pdf"),
+  { .name = ngx_string("text2pdf"),
     .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
     .set = ngx_http_htmldoc_convert_set,
     .conf = NGX_HTTP_LOC_CONF_OFFSET,
     .offset = offsetof(ngx_http_htmldoc_location_conf_t, data),
-    .post = &(ngx_http_htmldoc_type_t){ INPUT_TYPE_HTML, OUTPUT_TYPE_PDF } },
-  { .name = ngx_string("html2ps"),
+    .post = &(ngx_http_htmldoc_type_t){ INPUT_TYPE_TEXT, OUTPUT_TYPE_PDF } },
+  { .name = ngx_string("text2ps"),
     .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
     .set = ngx_http_htmldoc_convert_set,
     .conf = NGX_HTTP_LOC_CONF_OFFSET,
     .offset = offsetof(ngx_http_htmldoc_location_conf_t, data),
-    .post = &(ngx_http_htmldoc_type_t){ INPUT_TYPE_HTML, OUTPUT_TYPE_PS } },
+    .post = &(ngx_http_htmldoc_type_t){ INPUT_TYPE_TEXT, OUTPUT_TYPE_PS } },
   { .name = ngx_string("url2pdf"),
     .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
     .set = ngx_http_htmldoc_convert_set,
