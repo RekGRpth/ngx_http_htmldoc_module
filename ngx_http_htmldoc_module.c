@@ -129,7 +129,7 @@ static ngx_int_t ngx_http_htmldoc_header_filter(ngx_http_request_t *r) {
     if (!context) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
     ngx_http_set_ctx(r, context, ngx_http_htmldoc_module);
     context->type = r->headers_out.content_type;
-    if (location_conf->data == NGX_CONF_UNSET_PTR && !(context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) return ngx_http_next_header_filter(r);
+    if (location_conf->data == NGX_CONF_UNSET_PTR && !(location_conf->type.input == INPUT_TYPE_TEXT && context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) return ngx_http_next_header_filter(r);
     if (location_conf->type.input == NGX_CONF_UNSET_UINT) return ngx_http_next_header_filter(r);
     if (location_conf->type.output == NGX_CONF_UNSET_UINT) return ngx_http_next_header_filter(r);
     ngx_http_clear_content_length(r);
@@ -189,21 +189,39 @@ static ngx_int_t ngx_http_htmldoc_body_filter_internal(ngx_http_request_t *r, ng
     ngx_int_t rc = NGX_ERROR;
     ngx_str_t output = ngx_null_string;
     tree_t *document = NULL;
-    ngx_http_complex_value_t *elts = location_conf->data->elts;
-    for (ngx_uint_t i = 0; i < location_conf->data->nelts; i++) {
-        ngx_str_t data;
-        if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto htmlDeleteTree; }
-        if (!_htmlInitialized) htmlSetCharSet("utf-8");
-        switch (location_conf->type.input) {
-            case INPUT_TYPE_TEXT: {
-                if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); goto htmlDeleteTree; }
-            } break;
-            default: {
-                u_char *fileurl = ngx_pnalloc(r->pool, (data.len + 1));
-                if (!fileurl) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto htmlDeleteTree; }
-                (void) ngx_cpystrn(fileurl, data.data, data.len + 1);
-                if (read_fileurl(fileurl, &document, location_conf->type.input == INPUT_TYPE_FILE ? Path : NULL, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_fileurl != NGX_OK"); goto htmlDeleteTree; }
-            } break;
+    if (!_htmlInitialized) htmlSetCharSet("utf-8");
+    if (location_conf->type.input == INPUT_TYPE_TEXT && in) {
+        ngx_str_t data = ngx_null_string;
+        for (ngx_chain_t *cl = in; cl; cl = cl->next) {
+            if (!ngx_buf_in_memory(cl->buf)) continue;
+            data.len += cl->buf->last - cl->buf->pos;
+        }
+        if (!(data.data = ngx_pnalloc(r->pool, data.len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto ret; }
+        u_char *p = data.data;
+        for (ngx_chain_t *cl = in; cl; cl = cl->next) {
+            if (!ngx_buf_in_memory(cl->buf)) continue;
+            size_t len = cl->buf->last - cl->buf->pos;
+            if (!len) continue;
+            p = ngx_copy(p, cl->buf->pos, len);
+        }
+        if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); goto htmlDeleteTree; }
+    } else {
+        ngx_http_complex_value_t *elts = location_conf->data->elts;
+        for (ngx_uint_t i = 0; i < location_conf->data->nelts; i++) {
+            ngx_str_t data;
+            if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto htmlDeleteTree; }
+    //        if (!_htmlInitialized) htmlSetCharSet("utf-8");
+            switch (location_conf->type.input) {
+                case INPUT_TYPE_TEXT: {
+                    if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); goto htmlDeleteTree; }
+                } break;
+                default: {
+                    u_char *fileurl = ngx_pnalloc(r->pool, (data.len + 1));
+                    if (!fileurl) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto htmlDeleteTree; }
+                    (void) ngx_cpystrn(fileurl, data.data, data.len + 1);
+                    if (read_fileurl(fileurl, &document, location_conf->type.input == INPUT_TYPE_FILE ? Path : NULL, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_fileurl != NGX_OK"); goto htmlDeleteTree; }
+                } break;
+            }
         }
     }
     while (document && document->prev) document = document->prev;
@@ -229,6 +247,7 @@ htmlDeleteTree:
     if (document) htmlDeleteTree(document);
     file_cleanup();
     image_flush_cache();
+ret:
     return rc;
 }
 
@@ -268,7 +287,7 @@ static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_htmldoc_location_conf_t *location_conf = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
     ngx_http_htmldoc_context_t *context = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
-    if (location_conf->data == NGX_CONF_UNSET_PTR && !(in && context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) ngx_http_next_body_filter(r, in);
+    if (location_conf->data == NGX_CONF_UNSET_PTR && !(location_conf->type.input == INPUT_TYPE_TEXT && in && context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) ngx_http_next_body_filter(r, in);
     if (location_conf->type.input == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
     if (location_conf->type.output == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
     ngx_http_core_loc_conf_t *core_loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
