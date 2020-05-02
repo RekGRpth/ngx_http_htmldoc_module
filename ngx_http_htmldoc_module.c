@@ -266,10 +266,9 @@ static ngx_int_t ngx_http_htmldoc_thread_handler(ngx_thread_task_t *task, ngx_fi
 
 static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t *in) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    if (in) return ngx_http_next_body_filter(r, in);
     ngx_http_htmldoc_location_conf_t *location_conf = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
     ngx_http_htmldoc_context_t *context = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
-    if (location_conf->data == NGX_CONF_UNSET_PTR && !(context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) ngx_http_next_body_filter(r, in);
+    if (location_conf->data == NGX_CONF_UNSET_PTR && !(in && context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) ngx_http_next_body_filter(r, in);
     if (location_conf->type.input == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
     if (location_conf->type.output == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
     ngx_http_core_loc_conf_t *core_loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
