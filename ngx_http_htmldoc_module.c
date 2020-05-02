@@ -26,6 +26,10 @@ typedef struct {
 } ngx_http_htmldoc_type_t;
 
 typedef struct {
+    ngx_str_t type;
+} ngx_http_htmldoc_context_t;
+
+typedef struct {
     ngx_array_t *data;
     ngx_http_htmldoc_type_t type;
 } ngx_http_htmldoc_location_conf_t;
@@ -46,7 +50,7 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
 static char *ngx_http_htmldoc_convert_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
     ngx_http_htmldoc_location_conf_t *location_conf = conf;
     if (location_conf->data != NGX_CONF_UNSET_PTR) return "is duplicate";
-    if (!(location_conf->data = ngx_array_create(cf->pool, 4, sizeof(ngx_http_complex_value_t)))) return "!ngx_array_create";
+    if (!(location_conf->data = ngx_array_create(cf->pool, 1, sizeof(ngx_http_complex_value_t)))) return "!ngx_array_create";
     ngx_str_t *elts = cf->args->elts;
     for (ngx_uint_t i = 1; i < cf->args->nelts; i++) {
         ngx_http_complex_value_t *cv = ngx_array_push(location_conf->data);
@@ -74,13 +78,13 @@ static ngx_command_t ngx_http_htmldoc_commands[] = {
     .offset = offsetof(ngx_http_htmldoc_location_conf_t, data),
     .post = &(ngx_http_htmldoc_type_t){ INPUT_TYPE_FILE, OUTPUT_TYPE_PS } },
   { .name = ngx_string("text2pdf"),
-    .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
+    .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_ANY,
     .set = ngx_http_htmldoc_convert_set,
     .conf = NGX_HTTP_LOC_CONF_OFFSET,
     .offset = offsetof(ngx_http_htmldoc_location_conf_t, data),
     .post = &(ngx_http_htmldoc_type_t){ INPUT_TYPE_TEXT, OUTPUT_TYPE_PDF } },
   { .name = ngx_string("text2ps"),
-    .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_1MORE,
+    .type = NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_ANY,
     .set = ngx_http_htmldoc_convert_set,
     .conf = NGX_HTTP_LOC_CONF_OFFSET,
     .offset = offsetof(ngx_http_htmldoc_location_conf_t, data),
@@ -121,7 +125,11 @@ static char *ngx_http_htmldoc_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
 static ngx_int_t ngx_http_htmldoc_header_filter(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_htmldoc_location_conf_t *location_conf = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
-    if (location_conf->data == NGX_CONF_UNSET_PTR) return ngx_http_next_header_filter(r);
+    ngx_http_htmldoc_context_t *context = ngx_pcalloc(r->pool, sizeof(ngx_http_htmldoc_context_t));
+    if (!context) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+    ngx_http_set_ctx(r, context, ngx_http_htmldoc_module);
+    context->type = r->headers_out.content_type;
+    if (location_conf->data == NGX_CONF_UNSET_PTR && !(context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) return ngx_http_next_header_filter(r);
     if (location_conf->type.input == NGX_CONF_UNSET_UINT) return ngx_http_next_header_filter(r);
     if (location_conf->type.output == NGX_CONF_UNSET_UINT) return ngx_http_next_header_filter(r);
     ngx_http_clear_content_length(r);
@@ -200,10 +208,6 @@ static ngx_int_t ngx_http_htmldoc_body_filter_internal(ngx_http_request_t *r, ng
     }
     while (document && document->prev) document = document->prev;
     htmlFixLinks(document, document, 0);
-/*    switch (location_conf->type.output) {
-        case OUTPUT_TYPE_PDF: PSLevel = 0; ngx_str_set(&r->headers_out.content_type, "application/pdf"); break;
-        case OUTPUT_TYPE_PS: PSLevel = 3; ngx_str_set(&r->headers_out.content_type, "application/ps"); break;
-    }*/
     FILE *out = open_memstream((char **)&output.data, &output.len);
     if (!out) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!open_memstream"); goto htmlDeleteTree; }
     pspdf_export_out(document, NULL, out);
@@ -256,8 +260,6 @@ static ngx_int_t ngx_http_htmldoc_thread_handler(ngx_thread_task_t *task, ngx_fi
     if (ngx_thread_task_post(thread_pool, task) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_thread_task_post != NGX_OK"); return NGX_ERROR; }
     r->main->blocked++;
     r->aio = 1;
-    ngx_output_chain_ctx_t *ctx = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
-    ctx->aio = 1;
     return NGX_OK;
 }
 #endif
@@ -266,7 +268,8 @@ static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     if (in) return ngx_http_next_body_filter(r, in);
     ngx_http_htmldoc_location_conf_t *location_conf = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
-    if (location_conf->data == NGX_CONF_UNSET_PTR) return ngx_http_next_body_filter(r, in);
+    ngx_http_htmldoc_context_t *context = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
+    if (location_conf->data == NGX_CONF_UNSET_PTR && !(context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) ngx_http_next_body_filter(r, in);
     if (location_conf->type.input == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
     if (location_conf->type.output == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
     ngx_http_core_loc_conf_t *core_loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
@@ -275,15 +278,12 @@ static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t
 #endif
     return ngx_http_htmldoc_body_filter_internal(r, in);
 #if (NGX_THREADS)
-    ngx_output_chain_ctx_t *ctx = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
-    if (!ctx) {
-        if (!(ctx = ngx_pcalloc(r->pool, sizeof(ngx_output_chain_ctx_t)))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
-        ngx_http_set_ctx(r, ctx, ngx_http_htmldoc_module);
-        ctx->pool = r->pool;
-        ctx->output_filter = (ngx_output_chain_filter_pt)ngx_http_htmldoc_body_filter_internal;
-        ctx->filter_ctx = r;
-        ctx->thread_handler = ngx_http_htmldoc_thread_handler;
-    }
+    ngx_output_chain_ctx_t *ctx = ngx_pcalloc(r->pool, sizeof(ngx_output_chain_ctx_t));
+    if (!ctx) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
+    ctx->pool = r->pool;
+    ctx->output_filter = (ngx_output_chain_filter_pt)ngx_http_htmldoc_body_filter_internal;
+    ctx->filter_ctx = r;
+    ctx->thread_handler = ngx_http_htmldoc_thread_handler;
     ctx->aio = r->aio;
     return ngx_output_chain(ctx, in);
 #endif
