@@ -201,6 +201,7 @@ static ngx_int_t ngx_http_htmldoc_body_filter_internal(ngx_http_request_t *r, ng
             if (!ngx_buf_in_memory(cl->buf)) continue;
             data.len += cl->buf->last - cl->buf->pos;
         }
+        if (!data.len) return ngx_http_next_body_filter(r, in);
         if (!(data.data = ngx_pnalloc(r->pool, data.len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto ret; }
         u_char *p = data.data;
         for (ngx_chain_t *cl = in; cl; cl = cl->next) {
