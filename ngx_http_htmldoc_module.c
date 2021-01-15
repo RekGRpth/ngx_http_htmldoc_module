@@ -5,11 +5,6 @@
 #include "htmldoc.h"
 
 enum {
-    DATA_TYPE_TEXT = 0,
-    DATA_TYPE_ARRAY
-};
-
-enum {
     INPUT_TYPE_FILE = 0,
     INPUT_TYPE_HTML,
     INPUT_TYPE_URL
