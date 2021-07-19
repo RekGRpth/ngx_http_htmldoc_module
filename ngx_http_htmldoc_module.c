@@ -183,9 +183,14 @@ static ngx_int_t read_html(u_char *html, size_t len, tree_t **document, ngx_log_
     return NGX_OK;
 }
 
-static ngx_int_t ngx_http_htmldoc_body_filter_internal(ngx_http_request_t *r, ngx_chain_t *in) {
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t *in) {
     ngx_http_htmldoc_location_t *location = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
+    ngx_http_htmldoc_context_t *context = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
+    if (!context) return ngx_http_next_body_filter(r, in);
+    if (location->data == NGX_CONF_UNSET_PTR && !(location->type.input == INPUT_TYPE_HTML && in && context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) ngx_http_next_body_filter(r, in);
+    if (location->type.input == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
+    if (location->type.output == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_int_t rc = NGX_ERROR;
     ngx_str_t output = ngx_null_string;
     tree_t *document = NULL;
@@ -253,63 +258,6 @@ htmlDeleteTree:
     image_flush_cache();
 ret:
     return rc;
-}
-
-#if (NGX_THREADS)
-static void ngx_http_htmldoc_thread_event_handler(ngx_event_t *ev) {
-    ngx_http_request_t *r = ev->data;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_connection_t *c = r->connection;
-    r->main->blocked--;
-    r->aio = 0;
-    if (r->done) c->write->handler(c->write); else {
-        r->write_event_handler(r);
-        ngx_http_run_posted_requests(c);
-    }
-}
-
-static ngx_int_t ngx_http_htmldoc_thread_handler(ngx_thread_task_t *task, ngx_file_t *file) {
-    ngx_http_request_t *r = file->thread_ctx;
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_http_core_loc_conf_t *core = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-    ngx_thread_pool_t *thread_pool = core->thread_pool;
-    if (!thread_pool) {
-        ngx_str_t name;
-        if (ngx_http_complex_value(r, core->thread_pool_value, &name) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); return NGX_ERROR; }
-        if (!(thread_pool = ngx_thread_pool_get((ngx_cycle_t *)ngx_cycle, &name))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "thread pool \"%V\" not found", &name); return NGX_ERROR; }
-    }
-    task->event.data = r;
-    task->event.handler = ngx_http_htmldoc_thread_event_handler;
-    if (ngx_thread_task_post(thread_pool, task) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_thread_task_post != NGX_OK"); return NGX_ERROR; }
-    r->main->blocked++;
-    r->aio = 1;
-    return NGX_OK;
-}
-#endif
-
-static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t *in) {
-    ngx_http_htmldoc_location_t *location = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
-    ngx_http_htmldoc_context_t *context = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
-    if (!context) return ngx_http_next_body_filter(r, in);
-    if (location->data == NGX_CONF_UNSET_PTR && !(location->type.input == INPUT_TYPE_HTML && in && context->type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(context->type.data, (u_char *)"text/html", sizeof("text/html") - 1))) ngx_http_next_body_filter(r, in);
-    if (location->type.input == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
-    if (location->type.output == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
-    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_http_core_loc_conf_t *core = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-#if (NGX_THREADS)
-    if (core->aio != NGX_HTTP_AIO_THREADS)
-#endif
-    return ngx_http_htmldoc_body_filter_internal(r, in);
-#if (NGX_THREADS)
-    ngx_output_chain_ctx_t *ctx = ngx_pcalloc(r->pool, sizeof(*ctx));
-    if (!ctx) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
-    ctx->pool = r->pool;
-    ctx->output_filter = (ngx_output_chain_filter_pt)ngx_http_htmldoc_body_filter_internal;
-    ctx->filter_ctx = r;
-    ctx->thread_handler = ngx_http_htmldoc_thread_handler;
-    ctx->aio = r->aio;
-    return ngx_output_chain(ctx, in);
-#endif
 }
 
 static ngx_int_t ngx_http_htmldoc_postconfiguration(ngx_conf_t *cf) {
