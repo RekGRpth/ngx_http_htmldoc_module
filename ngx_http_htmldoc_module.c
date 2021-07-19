@@ -54,8 +54,8 @@ static char *ngx_http_htmldoc_convert_set(ngx_conf_t *cf, ngx_command_t *cmd, vo
         if (ngx_http_compile_complex_value(&ccv) != NGX_OK) return "ngx_http_compile_complex_value != NGX_OK";
     }
     location->type = *(ngx_http_htmldoc_type_t *)cmd->post;
-    ngx_http_core_loc_conf_t *core_loc_conf = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
-    if (!core_loc_conf->handler) core_loc_conf->handler = ngx_http_htmldoc_handler;
+    ngx_http_core_loc_conf_t *core = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
+    if (!core->handler) core->handler = ngx_http_htmldoc_handler;
     return NGX_CONF_OK;
 }
 
@@ -230,21 +230,21 @@ static ngx_int_t ngx_http_htmldoc_body_filter_internal(ngx_http_request_t *r, ng
     if (!out) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!open_memstream"); goto htmlDeleteTree; }
     pspdf_export_out(document, NULL, out);
     if (!output.len) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!output.len"); goto free; }
-    ngx_chain_t *chain = ngx_alloc_chain_link(r->pool);
-    if (!chain) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_alloc_chain_link"); goto free; }
-    chain->next = NULL;
-    ngx_buf_t *buf = chain->buf = ngx_create_temp_buf(r->pool, output.len);
-    if (!buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_create_temp_buf"); goto free; }
-    buf->memory = 1;
-    buf->last = ngx_copy(buf->last, output.data, output.len);
-    if (buf->last != buf->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "buf->last != buf->end"); goto free; }
+    ngx_chain_t *cl = ngx_alloc_chain_link(r->pool);
+    if (!cl) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_alloc_chain_link"); goto free; }
+    cl->next = NULL;
+    ngx_buf_t *b = cl->buf = ngx_create_temp_buf(r->pool, output.len);
+    if (!b) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_create_temp_buf"); goto free; }
+    b->memory = 1;
+    b->last = ngx_copy(b->last, output.data, output.len);
+    if (b->last != b->end) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "b->last != b->end"); goto free; }
     if (r == r->main && !r->post_action) {
-        buf->last_buf = 1;
+        b->last_buf = 1;
     } else {
-        buf->sync = 1;
-        buf->last_in_chain = 1;
+        b->sync = 1;
+        b->last_in_chain = 1;
     }
-    rc = ngx_http_next_body_filter(r, chain);
+    rc = ngx_http_next_body_filter(r, cl);
 free:
     free(output.data);
 htmlDeleteTree:
@@ -271,11 +271,11 @@ static void ngx_http_htmldoc_thread_event_handler(ngx_event_t *ev) {
 static ngx_int_t ngx_http_htmldoc_thread_handler(ngx_thread_task_t *task, ngx_file_t *file) {
     ngx_http_request_t *r = file->thread_ctx;
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_http_core_loc_conf_t *core_loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
-    ngx_thread_pool_t *thread_pool = core_loc_conf->thread_pool;
+    ngx_http_core_loc_conf_t *core = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+    ngx_thread_pool_t *thread_pool = core->thread_pool;
     if (!thread_pool) {
         ngx_str_t name;
-        if (ngx_http_complex_value(r, core_loc_conf->thread_pool_value, &name) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); return NGX_ERROR; }
+        if (ngx_http_complex_value(r, core->thread_pool_value, &name) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); return NGX_ERROR; }
         if (!(thread_pool = ngx_thread_pool_get((ngx_cycle_t *)ngx_cycle, &name))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "thread pool \"%V\" not found", &name); return NGX_ERROR; }
     }
     task->event.data = r;
@@ -295,9 +295,9 @@ static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t
     if (location->type.input == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
     if (location->type.output == NGX_CONF_UNSET_UINT) return ngx_http_next_body_filter(r, in);
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
-    ngx_http_core_loc_conf_t *core_loc_conf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+    ngx_http_core_loc_conf_t *core = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 #if (NGX_THREADS)
-    if (core_loc_conf->aio != NGX_HTTP_AIO_THREADS)
+    if (core->aio != NGX_HTTP_AIO_THREADS)
 #endif
     return ngx_http_htmldoc_body_filter_internal(r, in);
 #if (NGX_THREADS)
