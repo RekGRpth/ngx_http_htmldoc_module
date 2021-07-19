@@ -222,8 +222,8 @@ static char *ngx_http_htmldoc_merge_loc_conf(ngx_conf_t *cf, void *parent, void 
 
 static ngx_int_t ngx_http_htmldoc_header_filter(ngx_http_request_t *r) {
     ngx_http_htmldoc_location_t *location = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
-    if (location->type.input == NGX_CONF_UNSET_UINT || location->type.output == NGX_CONF_UNSET_UINT) return ngx_http_next_header_filter(r);
-    if (location->data == NGX_CONF_UNSET_PTR && !(location->type.input == INPUT_TYPE_HTML && r->headers_out.content_type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(r->headers_out.content_type.data, (u_char *)"text/html", sizeof("text/html") - 1))) return ngx_http_next_header_filter(r);
+    if (location->type.input == NGX_CONF_UNSET_UINT || location->type.output == NGX_CONF_UNSET_UINT || location->data != NGX_CONF_UNSET_PTR) return ngx_http_next_header_filter(r);
+    if (!(location->type.input == INPUT_TYPE_HTML && r->headers_out.content_type.len >= sizeof("text/html") - 1 && !ngx_strncasecmp(r->headers_out.content_type.data, (u_char *)"text/html", sizeof("text/html") - 1))) return ngx_http_next_header_filter(r);
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_htmldoc_context_t *context = ngx_pcalloc(r->pool, sizeof(*context));
     if (!context) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
