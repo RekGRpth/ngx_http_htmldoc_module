@@ -26,7 +26,7 @@ typedef struct {
 
 typedef struct {
     ngx_flag_t enable;
-} ngx_http_htmldoc_server_t;
+} ngx_http_htmldoc_main_t;
 
 typedef struct {
     ngx_array_t *data;
@@ -160,8 +160,8 @@ static char *ngx_http_htmldoc_convert_set(ngx_conf_t *cf, ngx_command_t *cmd, vo
         ngx_http_core_loc_conf_t *core = ngx_http_conf_get_module_loc_conf(cf, ngx_http_core_module);
         if (!core->handler) core->handler = ngx_http_htmldoc_handler;
     }
-    ngx_http_htmldoc_server_t *server = ngx_http_conf_get_module_srv_conf(cf, ngx_http_htmldoc_module);
-    server->enable = 1;
+    ngx_http_htmldoc_main_t *main = ngx_http_conf_get_module_main_conf(cf, ngx_http_htmldoc_module);
+    main->enable = 1;
     return NGX_CONF_OK;
 }
 
@@ -205,18 +205,10 @@ static ngx_command_t ngx_http_htmldoc_commands[] = {
     ngx_null_command
 };
 
-static void *ngx_http_htmldoc_create_srv_conf(ngx_conf_t *cf) {
-    ngx_http_htmldoc_server_t *server = ngx_pcalloc(cf->pool, sizeof(*server));
-    if (!server) return NULL;
-    server->enable = NGX_CONF_UNSET;
-    return server;
-}
-
-static char *ngx_http_htmldoc_merge_srv_conf(ngx_conf_t *cf, void *parent, void *child) {
-    ngx_http_htmldoc_server_t *prev = parent;
-    ngx_http_htmldoc_server_t *conf = child;
-    ngx_conf_merge_value(conf->enable, prev->enable, 0);
-    return NGX_CONF_OK;
+static void *ngx_http_htmldoc_create_main_conf(ngx_conf_t *cf) {
+    ngx_http_htmldoc_main_t *main = ngx_pcalloc(cf->pool, sizeof(*main));
+    if (!main) return NULL;
+    return main;
 }
 
 static void *ngx_http_htmldoc_create_loc_conf(ngx_conf_t *cf) {
@@ -291,8 +283,8 @@ error:
 }
 
 static ngx_int_t ngx_http_htmldoc_postconfiguration(ngx_conf_t *cf) {
-    ngx_http_htmldoc_server_t *server = ngx_http_conf_get_module_srv_conf(cf, ngx_http_htmldoc_module);
-    if (!server->enable) return NGX_OK;
+    ngx_http_htmldoc_main_t *main = ngx_http_conf_get_module_main_conf(cf, ngx_http_htmldoc_module);
+    if (!main->enable) return NGX_OK;
     ngx_http_next_header_filter = ngx_http_top_header_filter;
     ngx_http_top_header_filter = ngx_http_htmldoc_header_filter;
     ngx_http_next_body_filter = ngx_http_top_body_filter;
@@ -303,10 +295,10 @@ static ngx_int_t ngx_http_htmldoc_postconfiguration(ngx_conf_t *cf) {
 static ngx_http_module_t ngx_http_htmldoc_ctx = {
     .preconfiguration = NULL,
     .postconfiguration = ngx_http_htmldoc_postconfiguration,
-    .create_main_conf = NULL,
+    .create_main_conf = ngx_http_htmldoc_create_main_conf,
     .init_main_conf = NULL,
-    .create_srv_conf = ngx_http_htmldoc_create_srv_conf,
-    .merge_srv_conf = ngx_http_htmldoc_merge_srv_conf,
+    .create_srv_conf = NULL,
+    .merge_srv_conf = NULL,
     .create_loc_conf = ngx_http_htmldoc_create_loc_conf,
     .merge_loc_conf = ngx_http_htmldoc_merge_loc_conf
 };
