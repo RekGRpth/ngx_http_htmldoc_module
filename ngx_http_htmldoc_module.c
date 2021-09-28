@@ -21,7 +21,8 @@ typedef struct {
 } ngx_http_htmldoc_type_t;
 
 typedef struct {
-    ngx_flag_t enable;
+    ngx_chain_t *cl;
+    ngx_flag_t done;
 } ngx_http_htmldoc_context_t;
 
 typedef struct {
@@ -112,43 +113,46 @@ free:
     return b;
 }
 
+static void ngx_http_htmldoc_cleanup_handler(void *data) {
+    tree_t *document = data;
+    if (document) htmlDeleteTree(document);
+    file_cleanup();
+    image_flush_cache();
+}
+
 static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_int_t rc = ngx_http_discard_request_body(r);
     if (rc != NGX_OK && rc != NGX_AGAIN) return rc;
     tree_t *document = NULL;
+    ngx_http_cleanup_t *cln = ngx_http_cleanup_add(r, 0);
+    if (!cln) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_cleanup_add"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    cln->handler = ngx_http_htmldoc_cleanup_handler;
+    cln->data = document;
     if (!_htmlInitialized) htmlSetCharSet("utf-8");
     ngx_http_htmldoc_location_t *location = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
     ngx_http_complex_value_t *elts = location->data->elts;
     for (ngx_uint_t i = 0; i < location->data->nelts; i++) {
         ngx_str_t data;
-        if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); goto error; }
+        if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
         switch (location->type.input) {
             case INPUT_TYPE_HTML: {
-                if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); goto error; }
+                if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
             } break;
             default: {
                 u_char *fileurl = ngx_pnalloc(r->pool, (data.len + 1));
-                if (!fileurl) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto error; }
+                if (!fileurl) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
                 (void) ngx_cpystrn(fileurl, data.data, data.len + 1);
-                if (read_fileurl(fileurl, &document, location->type.input == INPUT_TYPE_FILE ? Path : NULL, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_fileurl != NGX_OK"); goto error; }
+                if (read_fileurl(fileurl, &document, location->type.input == INPUT_TYPE_FILE ? Path : NULL, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_fileurl != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
             } break;
         }
     }
     ngx_chain_t cl = {.buf = ngx_http_htmldoc_process(r, document), .next = NULL};
-    if (!cl.buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!cl.buf"); goto error; }
-    if (document) htmlDeleteTree(document);
-    file_cleanup();
-    image_flush_cache();
+    if (!cl.buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!cl.buf"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     r->headers_out.status = NGX_HTTP_OK;
     rc = ngx_http_send_header(r);
     if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return rc;
     return ngx_http_output_filter(r, &cl);
-error:
-    if (document) htmlDeleteTree(document);
-    file_cleanup();
-    image_flush_cache();
-    return NGX_HTTP_INTERNAL_SERVER_ERROR;
 }
 
 static char *ngx_http_htmldoc_convert_set(ngx_conf_t *cf, ngx_command_t *cmd, void *conf) {
@@ -243,7 +247,6 @@ static ngx_int_t ngx_http_htmldoc_header_filter(ngx_http_request_t *r) {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
     ngx_http_htmldoc_context_t *context = ngx_pcalloc(r->pool, sizeof(*context));
     if (!context) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pcalloc"); return NGX_ERROR; }
-    context->enable = 1;
     ngx_http_set_ctx(r, context, ngx_http_htmldoc_module);
     return NGX_OK;
 }
@@ -252,40 +255,39 @@ static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t
     if (!in) return ngx_http_next_body_filter(r, in);
     ngx_http_htmldoc_context_t *context = ngx_http_get_module_ctx(r, ngx_http_htmldoc_module);
     ngx_http_htmldoc_location_t *location = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
-    if (location->type.input == NGX_CONF_UNSET_UINT || location->type.output == NGX_CONF_UNSET_UINT || !context || !context->enable) return ngx_http_next_body_filter(r, in);
+    if (location->type.input == NGX_CONF_UNSET_UINT || location->type.output == NGX_CONF_UNSET_UINT || !context || context->done) return ngx_http_next_body_filter(r, in);
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0, "%s", __func__);
+    if (!in->buf->last_buf && !in->buf->last_in_chain) {
+        if (ngx_chain_add_copy(r->pool, &context->cl, in) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_chain_add_copy != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+        return ngx_http_next_body_filter(r, in);
+    }
     tree_t *document = NULL;
+    ngx_http_cleanup_t *cln = ngx_http_cleanup_add(r, 0);
+    if (!cln) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_cleanup_add"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    cln->handler = ngx_http_htmldoc_cleanup_handler;
+    cln->data = document;
     if (!_htmlInitialized) htmlSetCharSet("utf-8");
     ngx_str_t data = ngx_null_string;
-    for (ngx_chain_t *cl = in; cl; cl = cl->next) {
+    for (ngx_chain_t *cl = context->cl ? context->cl : in; cl; cl = cl->next) {
         if (!ngx_buf_in_memory(cl->buf)) continue;
         data.len += cl->buf->last - cl->buf->pos;
     }
     if (!data.len) return ngx_http_next_body_filter(r, in);
-    if (!(data.data = ngx_pnalloc(r->pool, data.len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); goto error; }
+    if (!(data.data = ngx_pnalloc(r->pool, data.len))) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     u_char *p = data.data;
     size_t len;
-    for (ngx_chain_t *cl = in; cl; cl = cl->next) {
+    for (ngx_chain_t *cl = context->cl ? context->cl : in; cl; cl = cl->next) {
         if (!ngx_buf_in_memory(cl->buf)) continue;
         if (!(len = cl->buf->last - cl->buf->pos)) continue;
         p = ngx_copy(p, cl->buf->pos, len);
     }
-    if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); goto error; }
+    if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     ngx_chain_t cl = {.buf = ngx_http_htmldoc_process(r, document), .next = NULL};
-    if (!cl.buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!cl.buf"); goto error; }
-    if (document) htmlDeleteTree(document);
-    file_cleanup();
-    image_flush_cache();
+    if (!cl.buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!cl.buf"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    context->done = 1;
     ngx_int_t rc = ngx_http_next_header_filter(r);
-    if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return NGX_ERROR;
-    ngx_http_set_ctx(r, NULL, ngx_http_htmldoc_module);
+    if (rc == NGX_ERROR || rc > NGX_OK || r->header_only) return rc;
     return ngx_http_next_body_filter(r, &cl);
-error:
-    if (document) htmlDeleteTree(document);
-    file_cleanup();
-    image_flush_cache();
-    ngx_http_set_ctx(r, NULL, ngx_http_htmldoc_module);
-    return ngx_http_filter_finalize_request(r, &ngx_http_htmldoc_module, NGX_HTTP_INTERNAL_SERVER_ERROR);
 }
 
 static ngx_int_t ngx_http_htmldoc_postconfiguration(ngx_conf_t *cf) {
