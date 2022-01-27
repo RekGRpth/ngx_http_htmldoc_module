@@ -63,20 +63,20 @@ static ngx_int_t read_fileurl(ngx_log_t *log, tree_t **document, const u_char *f
 }
 
 static ngx_int_t read_html(ngx_log_t *log, tree_t **document, u_char *html, size_t len) {
+    tree_t *file;
     _htmlPPI = 72.0f * _htmlBrowserWidth / (PageWidth - PageLeft - PageRight);
-    tree_t *file = htmlAddTree(NULL, MARKUP_FILE, NULL);
-    if (!file) { ngx_log_error(NGX_LOG_ERR, log, 0, "!htmlAddTree"); return NGX_ERROR; }
+    if (!(file = htmlAddTree(NULL, MARKUP_FILE, NULL))) { ngx_log_error(NGX_LOG_ERR, log, 0, "!htmlAddTree"); return NGX_ERROR; }
+    if (!*document) *document = file; else {
+        while ((*document)->next) *document = (*document)->next;
+        (*document)->next = file;
+        file->prev = *document;
+    }
     htmlSetVariable(file, (uchar *)"_HD_FILENAME", (uchar *)"");
     htmlSetVariable(file, (uchar *)"_HD_BASE", (uchar *)".");
     FILE *in = fmemopen(html, len, "rb");
     if (!in) { ngx_log_error(NGX_LOG_ERR, log, 0, "!fmemopen"); return NGX_ERROR; }
     htmlReadFile2(file, in, ".");
     fclose(in);
-    if (!*document) *document = file; else {
-        while ((*document)->next) *document = (*document)->next;
-        (*document)->next = file;
-        file->prev = *document;
-    }
     return NGX_OK;
 }
 
