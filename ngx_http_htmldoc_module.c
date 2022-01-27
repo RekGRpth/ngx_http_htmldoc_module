@@ -39,7 +39,7 @@ ngx_module_t ngx_http_htmldoc_module;
 static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt ngx_http_next_body_filter;
 
-static ngx_int_t read_fileurl(const u_char *fileurl, tree_t **document, const char *path, ngx_log_t *log) {
+static ngx_int_t read_fileurl(ngx_log_t *log, tree_t **document, const u_char *fileurl, const char *path) {
     _htmlPPI = 72.0f * _htmlBrowserWidth / (PageWidth - PageLeft - PageRight);
     tree_t *file = htmlAddTree(NULL, MARKUP_FILE, NULL);
     if (!file) { ngx_log_error(NGX_LOG_ERR, log, 0, "!htmlAddTree"); return NGX_ERROR; }
@@ -62,7 +62,7 @@ static ngx_int_t read_fileurl(const u_char *fileurl, tree_t **document, const ch
     return NGX_OK;
 }
 
-static ngx_int_t read_html(u_char *html, size_t len, tree_t **document, ngx_log_t *log) {
+static ngx_int_t read_html(ngx_log_t *log, tree_t **document, u_char *html, size_t len) {
     _htmlPPI = 72.0f * _htmlBrowserWidth / (PageWidth - PageLeft - PageRight);
     tree_t *file = htmlAddTree(NULL, MARKUP_FILE, NULL);
     if (!file) { ngx_log_error(NGX_LOG_ERR, log, 0, "!htmlAddTree"); return NGX_ERROR; }
@@ -137,13 +137,13 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
         if (ngx_http_complex_value(r, &elts[i], &data) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "ngx_http_complex_value != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
         switch (location->type.input) {
             case INPUT_TYPE_HTML: {
-                if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+                if (read_html(r->connection->log, &document, data.data, data.len) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
             } break;
             default: {
                 u_char *fileurl = ngx_pnalloc(r->pool, (data.len + 1));
                 if (!fileurl) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_pnalloc"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
                 (void) ngx_cpystrn(fileurl, data.data, data.len + 1);
-                if (read_fileurl(fileurl, &document, location->type.input == INPUT_TYPE_FILE ? Path : NULL, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_fileurl != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+                if (read_fileurl(r->connection->log, &document, fileurl, location->type.input == INPUT_TYPE_FILE ? Path : NULL) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_fileurl != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
             } break;
         }
     }
@@ -281,7 +281,7 @@ static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t
         if (!(len = cl->buf->last - cl->buf->pos)) continue;
         p = ngx_copy(p, cl->buf->pos, len);
     }
-    if (read_html(data.data, data.len, &document, r->connection->log) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    if (read_html(r->connection->log, &document, data.data, data.len) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     ngx_chain_t cl = {.buf = ngx_http_htmldoc_process(r, document), .next = NULL};
     if (!cl.buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!cl.buf"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     context->done = 1;
