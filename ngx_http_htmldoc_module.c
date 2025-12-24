@@ -57,7 +57,7 @@ static ngx_int_t read_fileurl(ngx_log_t *log, tree_t **document, const u_char *f
     htmlSetVariable(file, (uchar *)"_HD_FILENAME", (uchar *)file_basename((const char *)fileurl));
     htmlSetVariable(file, (uchar *)"_HD_BASE", (uchar *)base);
     if (!(in = fopen(realname, "rb"))) { ngx_log_error(NGX_LOG_ERR, log, 0, "!fopen(\"%s\")", realname); return NGX_ERROR; }
-    htmlReadFile2(file, in, base);
+    htmlReadFile(file, in, base);
     fclose(in);
     return NGX_OK;
 }
@@ -75,7 +75,7 @@ static ngx_int_t read_html(ngx_log_t *log, tree_t **document, u_char *html, size
     htmlSetVariable(file, (uchar *)"_HD_BASE", (uchar *)".");
     FILE *in = fmemopen(html, len, "rb");
     if (!in) { ngx_log_error(NGX_LOG_ERR, log, 0, "!fmemopen"); return NGX_ERROR; }
-    htmlReadFile2(file, in, ".");
+    htmlReadFile(file, in, ".");
     fclose(in);
     return NGX_OK;
 }
