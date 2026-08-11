@@ -23,7 +23,7 @@ use FindBin;
 
 $ENV{TEST_NGINX_HTML_DIR} = "$FindBin::Bin/html";
 
-plan tests => repeat_each() * 2 * blocks();
+plan tests => repeat_each() * 6;
 
 no_long_string();
 
@@ -55,3 +55,17 @@ Content-Type: application/ps
 GET /file2pdf
 --- response_headers
 Content-Type: application/pdf
+
+
+=== TEST 3: file2ps against a nonexistent file fails gracefully with 500, not a crash
+--- main_config
+    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+--- config
+    location /file2ps {
+        file2ps "$TEST_NGINX_HTML_DIR/does-not-exist.html";
+    }
+--- request
+GET /file2ps
+--- error_code: 500
+--- error_log
+read_fileurl != NGX_OK

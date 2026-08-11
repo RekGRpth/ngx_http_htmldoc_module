@@ -26,7 +26,7 @@ END {
     kill 'TERM', $backend_pid if $backend_pid;
 }
 
-plan tests => repeat_each() * 2 * blocks();
+plan tests => repeat_each() * 4;
 
 no_long_string();
 
@@ -40,6 +40,20 @@ __DATA__
 --- config
     location /url2pdf {
         url2pdf "http://127.0.0.1:21594/plain.html";
+    }
+--- request
+GET /url2pdf
+--- response_headers
+Content-Type: application/pdf
+--- timeout: 10
+
+
+=== TEST 2: url2pdf with several URLs (multi-document path)
+--- main_config
+    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+--- config
+    location /url2pdf {
+        url2pdf "http://127.0.0.1:21594/plain.html" "http://127.0.0.1:21594/plain2.html";
     }
 --- request
 GET /url2pdf
