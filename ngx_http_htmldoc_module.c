@@ -212,7 +212,7 @@ static ngx_command_t ngx_http_htmldoc_commands[] = {
     .set = ngx_http_htmldoc_convert_set,
     .conf = NGX_HTTP_LOC_CONF_OFFSET,
     .offset = offsetof(ngx_http_htmldoc_location_t, data),
-    .post = &(ngx_http_htmldoc_type_t){INPUT_TYPE_URL, OUTPUT_TYPE_PDF}},
+    .post = &(ngx_http_htmldoc_type_t){INPUT_TYPE_URL, OUTPUT_TYPE_PS}},
     ngx_null_command
 };
 
