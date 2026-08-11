@@ -260,7 +260,7 @@ static ngx_int_t ngx_chain_add_copy_buf(ngx_pool_t *pool, ngx_chain_t **chain, n
     while (in) {
         if (!(cl = ngx_alloc_chain_link(pool))) goto ret;
         if (!(cl->buf = ngx_create_temp_buf(pool, in->buf->last - in->buf->pos))) goto ret;
-        *cl->buf = *in->buf;
+        cl->buf->last = ngx_cpymem(cl->buf->pos, in->buf->pos, in->buf->last - in->buf->pos);
         in->buf->pos = in->buf->last;
         *ll = cl;
         ll = &cl->next;
