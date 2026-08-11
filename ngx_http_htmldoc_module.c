@@ -47,7 +47,7 @@ static ngx_int_t read_fileurl(ngx_log_t *log, tree_t **document, const u_char *f
     const char *base = file_directory((const char *)fileurl);
     const char *realname = file_find(path, (const char *)fileurl);
     if (!base) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file_directory(\"%s\")", fileurl); return NGX_ERROR; }
-    if (!realname) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file_find(\"%s\", \"%s\")", Path, fileurl); return NGX_ERROR; }
+    if (!realname) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file_find(\"%s\", \"%s\")", path ? path : "", fileurl); return NGX_ERROR; }
     if (path && path[0]) {
         char resolved[PATH_MAX];
         char resolved_path[PATH_MAX];
