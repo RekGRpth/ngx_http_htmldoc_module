@@ -3,6 +3,8 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 #include "htmldoc.h"
+#include <limits.h>
+#include <stdlib.h>
 
 typedef enum {
     INPUT_TYPE_FILE = 0,
@@ -46,6 +48,17 @@ static ngx_int_t read_fileurl(ngx_log_t *log, tree_t **document, const u_char *f
     const char *realname = file_find(path, (const char *)fileurl);
     if (!base) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file_directory(\"%s\")", fileurl); return NGX_ERROR; }
     if (!realname) { ngx_log_error(NGX_LOG_ERR, log, 0, "!file_find(\"%s\", \"%s\")", Path, fileurl); return NGX_ERROR; }
+    if (path && path[0]) {
+        char resolved[PATH_MAX];
+        char resolved_path[PATH_MAX];
+        if (!realpath(realname, resolved)) { ngx_log_error(NGX_LOG_ERR, log, 0, "!realpath(\"%s\")", realname); return NGX_ERROR; }
+        if (!realpath(path, resolved_path)) { ngx_log_error(NGX_LOG_ERR, log, 0, "!realpath(\"%s\")", path); return NGX_ERROR; }
+        size_t path_len = ngx_strlen(resolved_path);
+        if (ngx_strncmp(resolved, resolved_path, path_len) || (resolved[path_len] != '/' && resolved[path_len] != '\0')) {
+            ngx_log_error(NGX_LOG_ERR, log, 0, "!escape(\"%s\", \"%s\")", resolved, resolved_path);
+            return NGX_ERROR;
+        }
+    }
     _htmlPPI = 72.0f * _htmlBrowserWidth / (PageWidth - PageLeft - PageRight);
     if (!(file = htmlAddTree(NULL, MARKUP_FILE, NULL))) { ngx_log_error(NGX_LOG_ERR, log, 0, "!htmlAddTree"); return NGX_ERROR; }
     if (!*document) *document = file; else {
