@@ -128,7 +128,6 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
     ngx_http_cleanup_t *cln = ngx_http_cleanup_add(r, 0);
     if (!cln) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_cleanup_add"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     cln->handler = ngx_http_htmldoc_cleanup_handler;
-    cln->data = document;
     if (!_htmlInitialized) htmlSetCharSet("utf-8");
     ngx_http_htmldoc_location_t *location = ngx_http_get_module_loc_conf(r, ngx_http_htmldoc_module);
     ngx_http_complex_value_t *elts = location->data->elts;
@@ -146,6 +145,9 @@ static ngx_int_t ngx_http_htmldoc_handler(ngx_http_request_t *r) {
                 if (read_fileurl(r->connection->log, &document, fileurl, location->type.input == INPUT_TYPE_FILE ? Path : NULL) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_fileurl != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
             } break;
         }
+        tree_t *head = document;
+        while (head && head->prev) head = head->prev;
+        cln->data = head;
     }
     ngx_chain_t cl = {.buf = ngx_http_htmldoc_process(r, document), .next = NULL};
     if (!cl.buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!cl.buf"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
@@ -284,7 +286,6 @@ static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t
     ngx_http_cleanup_t *cln = ngx_http_cleanup_add(r, 0);
     if (!cln) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!ngx_http_cleanup_add"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     cln->handler = ngx_http_htmldoc_cleanup_handler;
-    cln->data = document;
     if (!_htmlInitialized) htmlSetCharSet("utf-8");
     ngx_str_t data = ngx_null_string;
     for (ngx_chain_t *cl = context->cl ? context->cl : in; cl; cl = cl->next) {
@@ -301,6 +302,7 @@ static ngx_int_t ngx_http_htmldoc_body_filter(ngx_http_request_t *r, ngx_chain_t
         p = ngx_copy(p, cl->buf->pos, len);
     }
     if (read_html(r->connection->log, &document, data.data, data.len) != NGX_OK) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "read_html != NGX_OK"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
+    cln->data = document;
     ngx_chain_t cl = {.buf = ngx_http_htmldoc_process(r, document), .next = NULL};
     if (!cl.buf) { ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "!cl.buf"); return NGX_HTTP_INTERNAL_SERVER_ERROR; }
     context->done = 1;
