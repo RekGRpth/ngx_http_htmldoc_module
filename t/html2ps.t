@@ -17,7 +17,7 @@ __DATA__
 
 === TEST 1: html2ps with a single document
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /html2ps {
         html2ps "hello world";
@@ -30,7 +30,7 @@ Content-Type: application/ps
 
 === TEST 2: html2pdf with a single document
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /html2pdf {
         html2pdf "hello world";
@@ -43,7 +43,7 @@ Content-Type: application/pdf
 
 === TEST 3: html2pdf with several documents (multi-append path)
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /html2pdf {
         html2pdf "one" "two" "three" "four";
@@ -56,7 +56,7 @@ Content-Type: application/pdf
 
 === TEST 4: HEAD request returns headers only, no body
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /html2ps {
         html2ps "hello world";
@@ -70,7 +70,7 @@ Content-Type: application/ps
 
 === TEST 5: Content-Length reflects the generated body length
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /html2ps {
         html2ps "hello world";

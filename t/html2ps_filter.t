@@ -50,7 +50,7 @@ __DATA__
 
 === TEST 1: html2ps auto-filter mode reassembles a fragmented proxied body without corruption
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config eval
 my $body = '<html><head><title>t</title></head><body>'
     . join('', map { chr(65 + $_ % 26) x 32 } (0 .. 79))
@@ -81,7 +81,7 @@ Content-Type: application/ps
 
 === TEST 2: html2ps; leaves a non-text/html response untouched
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /plain {
         html2ps;
@@ -97,7 +97,7 @@ Content-Type: text/plain
 
 === TEST 3: html2ps; converts a simple, non-fragmented text/html response (single-buffer happy path)
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /simple {
         html2ps;

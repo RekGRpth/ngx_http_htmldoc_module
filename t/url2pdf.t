@@ -36,7 +36,7 @@ __DATA__
 
 === TEST 1: url2pdf still produces a PDF document (Content-Type: application/pdf)
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /url2pdf {
         url2pdf "http://127.0.0.1:21594/plain.html";
@@ -50,7 +50,7 @@ Content-Type: application/pdf
 
 === TEST 2: url2pdf with several URLs (multi-document path)
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /url2pdf {
         url2pdf "http://127.0.0.1:21594/plain.html" "http://127.0.0.1:21594/plain2.html";

@@ -53,7 +53,7 @@ __DATA__
 
 === TEST 1: url2ps produces a PostScript document (Content-Type: application/ps)
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /url2ps {
         url2ps "http://127.0.0.1:21593/plain.html";
@@ -67,7 +67,7 @@ Content-Type: application/ps
 
 === TEST 2: url2ps with several URLs (multi-document path)
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /url2ps {
         url2ps "http://127.0.0.1:21593/plain.html" "http://127.0.0.1:21593/plain2.html";

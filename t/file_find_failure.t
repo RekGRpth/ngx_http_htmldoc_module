@@ -34,7 +34,7 @@ __DATA__
 
 === TEST 1: url2ps against a target that fails file_find() does not crash the worker
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /url2ps {
         url2ps "not-a-valid-url-at-all";

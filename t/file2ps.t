@@ -33,7 +33,7 @@ __DATA__
 
 === TEST 1: file2ps with an absolute path still works with an empty (unconfigured) Path
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /file2ps {
         file2ps "$TEST_NGINX_HTML_DIR/plain.html";
@@ -46,7 +46,7 @@ Content-Type: application/ps
 
 === TEST 2: file2pdf with an absolute path still works with an empty (unconfigured) Path
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /file2pdf {
         file2pdf "$TEST_NGINX_HTML_DIR/plain.html";
@@ -59,7 +59,7 @@ Content-Type: application/pdf
 
 === TEST 3: file2ps against a nonexistent file fails gracefully with 500, not a crash
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /file2ps {
         file2ps "$TEST_NGINX_HTML_DIR/does-not-exist.html";

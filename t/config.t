@@ -32,7 +32,7 @@ __DATA__
 
 === TEST 1: a second htmldoc directive in the same location is rejected as a duplicate
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /dup {
         file2pdf "a";
@@ -47,7 +47,7 @@ is duplicate
 
 === TEST 2: handler mode does NOT propagate to a nested location (nginx's own per-location handler dispatch, not this module's doing)
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /outer {
         html2ps "hello world";
@@ -61,7 +61,7 @@ GET /outer/inner
 
 === TEST 3: filter mode DOES propagate to a nested location via merge_loc_conf
 --- main_config
-    load_module /var/cache/nginx/src/nginx/objs/ngx_http_htmldoc_module.so;
+    load_module /etc/nginx/modules/ngx_http_htmldoc_module.so;
 --- config
     location /outer {
         html2ps;
